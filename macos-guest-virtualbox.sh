@@ -2,7 +2,7 @@
 # Push-button installer of macOS on VirtualBox
 # (c) myspaghetti, licensed under GPL2.0 or higher
 # url: https://github.com/myspaghetti/macos-virtualbox
-# version 0.93.3
+# version 0.93.6
 
 # Dependencies: bash  coreutils  gzip  unzip  wget  xxd  dmg2img
 # Supported versions:
@@ -63,7 +63,7 @@ function welcome() {
 echo -ne "\n${highlight_color}Push-button installer of macOS on VirtualBox${default_color}
 
 This script installs only open-source software and unmodified Apple binaries,
-and requires about ${highlight_color}40GB${default_color} of available storage, of which 20GB are for temporary
+and requires about ${highlight_color}45GB${default_color} of available storage, of which 25GB are for temporary
 installation files that may be deleted when the script is finished.
 
 The script interacts with the virtual machine twice, ${highlight_color}please do not interact${default_color}
@@ -433,6 +433,9 @@ for catalog in "${macOS_release_name}_sucatalog_"* "error"; do
     wget "${urlbase}InstallAssistantAuto.smd" \
     ${wgetargs} \
     --output-document="${catalog}_InstallAssistantAuto.smd"
+    if [[ "$(cat "${catalog}_InstallAssistantAuto.smd" )" =~ .*Beta.* ]]; then
+        continue
+    fi
     found_version="$(head -n 6 "${catalog}_InstallAssistantAuto.smd" | tail -n 1)"
     if [[ "${found_version}" == *${CFBundleShortVersionString}* ]]; then
         echo -e "Found download URL: ${urlbase}\n"
@@ -813,10 +816,11 @@ if [[ -n $(
     echo "Could not attach \"${macOS_release_name}_Installation_files.viso\". Exiting."; exit
 fi
 echo "Starting virtual machine \"${vm_name}\".
-This should take a couple of minutes. If booting fails, see the documentation
-for information about applying different CPU profiles."
+This should take a couple of minutes. If booting fails, exit the script by
+pressing CTRL-C then see the documentation for information about applying
+different CPU profiles."
 ( VBoxManage startvm "${vm_name}" >/dev/null 2>&1 )
-echo -e "\nUntil the script completes, please do not interact with the virtual machine."
+echo -e "\nUntil the script completes, please do not manually interact with\nthe virtual machine."
 [[ -z "${kscd}" ]] && declare_scancode_dict
 prompt_lang_utils
 prompt_terminal_ready
@@ -861,14 +865,23 @@ shut down the virtual machine. After shutdown, the initial base system will be
 detached from the VM and released from VirtualBox."
 print_dimly "If the partitioning fails, exit the script by pressing CTRL-C
 Otherwise, please wait."
-# Detach the original 2GB BaseSystem virtual disk image
 while [[ "$( VBoxManage list runningvms )" =~ \""${vm_name}"\" ]]; do sleep 2 >/dev/null 2>&1; done
-# Release basesystem VDI from VirtualBox configuration
-VBoxManage storageattach "${vm_name}" --storagectl SATA --port 2 --medium none >/dev/null 2>&1
-VBoxManage closemedium "${macOS_release_name}_BaseSystem.${storage_format}" >/dev/null 2>&1
-echo " ${macOS_release_name}_BaseSystem.${storage_format} successfully detached from"
+echo "Waiting for the VirtualBox GUI to shut off."
+for (( i=10; i>0; i-- )); do echo -ne "   \r${i} "; sleep 0.5; done; echo -e "\r   "
+# Detach the original 2GB BaseSystem virtual disk image
+# and release basesystem VDI from VirtualBox configuration
+if [[ -n $(
+    2>&1 VBoxManage storageattach "${vm_name}" --storagectl SATA --port 2 --medium none >/dev/null
+    2>&1 VBoxManage closemedium "${macOS_release_name}_BaseSystem.${storage_format}" >/dev/null
+    ) ]]; then
+    echo "Could not detach ${macOS_release_name}_BaseSystem.${storage_format}"
+    echo "It's possible the VirtualBox GUI took longer than five seconds to shut off."
+    echo "The macOS installation may be resumed with the following command:"
+    echo "  ${highlight_color}${0} populate_macos_target_disk${default_color}"
+    exit
+fi
+echo "${macOS_release_name}_BaseSystem.${storage_format} successfully detached from"
 echo "the virtual machine and released from VirtualBox Manager."
-sleep 3
 }
 
 function populate_macos_target_disk() {
@@ -910,7 +923,8 @@ add_another_terminal
 echo -e "\nThe second open Terminal in the virtual machine copies EFI and NVRAM files"
 echo -e "to the target EFI system partition when the installer finishes preparing."
 echo -e "\nAfter the installer finishes preparing and the EFI and NVRAM files are copied,"
-echo -ne "macOS will install and boot up when booting the target disk.\n\n"
+echo -ne "macOS will install and boot up when booting the target disk.\n"
+print_dimly "Please wait"
 # execute script concurrently, catch SIGUSR1 when installer finishes preparing
 kbstring='disks="$(diskutil list | grep -o "[0-9][^ ]* GB *disk[0-9]$" | sort -gr | grep -o disk[0-9])" && '\
 'disks=(${disks[@]}) && '\
@@ -937,24 +951,21 @@ send_keys
 send_enter
 if [[ ! ( "${vbox_version:0:1}" -gt 6
         || ( "${vbox_version:0:1}" = 6 && "${vbox_version:2:1}" -ge 1 ) ) ]]; then
-    echo -e "${highlight_color}When the installer finishes preparing and reboots the VM, press enter${default_color} so the script
+    echo -e "\n${highlight_color}When the installer finishes preparing and reboots the VM, press enter${default_color} so the script
 powers off the virtual machine and detaches the device \"${macOS_release_name} bootable installer.${storage_format}\" to avoid
 booting into the initial installer environment again."
     clear_input_buffer_then_read
     VBoxManage controlvm "${vm_name}" poweroff >/dev/null 2>&1
-    for (( i=10; i>5; i-- )); do echo -e "   \r${i}"; sleep 0.5; done
+    for (( i=10; i>0; i-- )); do echo -ne "   \r${i} "; sleep 0.5; done; echo -ne "\r   "
     VBoxManage storagectl "${vm_name}" --remove --name SATA >/dev/null 2>&1
     VBoxManage storagectl "${vm_name}" --add sata --name SATA --hostiocache on >/dev/null 2>&1
     VBoxManage storageattach "${vm_name}" --storagectl SATA --port 0 \
                --type hdd --nonrotational on --medium "${vm_name}.${storage_format}"
-    echo ""
-    for (( i=5; i>0; i-- )); do echo -e "   \r${i}"; sleep 0.5; done
 fi
-echo -e "For further information, such as applying EFI and NVRAM variables to enable
-iMessage connectivity, see the documentation with the following command:\n\n"
+echo -e "\nFor further information, such as applying EFI and NVRAM variables to enable
+iMessage connectivity, see the documentation with the following command:\n"
 would_you_like_to_know_less
 echo -e "\n${highlight_color}That's it! Enjoy your virtual machine.${default_color}\n"
-
 }
 
 function delete_temporary_files() {
@@ -1104,7 +1115,7 @@ automatically, applying the EFI and NVRAM variables before booting macOS.
         ${highlight_color}Changing the EFI and NVRAM parameters after installation${default_color}
 The variables mentioned above may be edited and applied to an existing macOS
 virtual machine by executing the following command and copying the generated
-files to the macOS EFI partition:
+files to the macOS EFI System Partition:
 
     ${low_contrast_color}${0} "'\\'"${default_color}
 ${low_contrast_color}configure_vm create_nvram_files create_macos_installation_files_viso${default_color}
@@ -1151,17 +1162,22 @@ The following primary display resolutions are supported by macOS on VirtualBox:
   ${low_contrast_color}1440x900   1280x800   1024x768   640x480${default_color}
 Secondary displays can have an arbitrary resolution.
 
-        ${highlight_color}CPU profiles${default_color}
+        ${highlight_color}CPU profiles and CPUID settings${default_color}
 macOS does not supprort every CPU supported by VirtualBox. If the macOS Base
 System does not boot, try applying different CPU profiles to the virtual
-machine with the following command:
+machine with the ${low_contrast_color}VBoxManage${default_color} commands described below. First, while the
+VM is powered off, set the guest's CPU profile to the host's CPU profile, then
+try to boot the virtual machine:
+    ${low_contrast_color}VBoxManage modifyvm \"\${vm_name}\" --cpu-profile host${default_color}
+    ${low_contrast_color}VBoxManage modifyvm \"\${vm_name}\" --cpuidremoveall${default_color}
+If booting fails, try assigning each of the preconfigured CPU profiles while
+the VM is powered off with the following command:
     ${low_contrast_color}VBoxManage modifyvm \"\${vm_name}\" --cpu-profile \"\${cpu_profile}\"${default_color}
 Available CPU profiles:
   ${low_contrast_color}\"Intel Xeon X5482 3.20GHz\"  \"Intel Core i7-2635QM\"  \"Intel Core i7-3960X\"${default_color}
   ${low_contrast_color}\"Intel Core i5-3570\"  \"Intel Core i7-5600U\"  \"Intel Core i7-6700K\"${default_color}
-Remove existing CPU profiles with the following commands:
-    ${low_contrast_color}VBoxManage modifyvm \"\${vm_name}\" --cpu-profile host${default_color}
-    ${low_contrast_color}VBoxManage modifyvm \"\${vm_name}\" --cpuidremoveall${default_color}
+If booting fails after trying each preconfigured CPU profile, the host's CPU
+requires specific ${highlight_color}macOS VirtualBox CPUID settings${default_color}.
 
         ${highlight_color}Unsupported features${default_color}
 Developing and maintaining VirtualBox or macOS features is beyond the scope of
@@ -1222,7 +1238,7 @@ for wrapper in 1; do
     if [[ -n "$(md5sum --version 2>/dev/null)" ]]; then
         tail -n +60 "${0}" | md5sum 2>/dev/null
     else
-        tail -n +60 "${0}" | md5sum 2>/dev/null
+        tail -n +60 "${0}" | md5 2>/dev/null
     fi
     echo "################################################################################"
     echo "BASH_VERSION ${BASH_VERSION}"
