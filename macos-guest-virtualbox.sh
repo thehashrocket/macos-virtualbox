@@ -18,7 +18,7 @@ vm_name="macOS"                  # name of the VirtualBox virtual machine
 macOS_release_name="Catalina"    # install "HighSierra" "Mojave" or "Catalina"
 storage_size=80000               # VM disk image size in MB, minimum 22000
 storage_format="vdi"             # VM disk image file format, "vdi" or "vmdk"
-cpu_count=2                      # VM CPU cores, minimum 2
+cpu_count=4                      # VM CPU cores, minimum 2
 memory_size=4096                 # VM RAM in MB, minimum 2048
 gpu_vram=128                     # VM video RAM in MB, minimum 34, maximum 128
 resolution="1280x800"            # VM display resolution
@@ -32,21 +32,21 @@ resolution="1280x800"            # VM display resolution
 
 #   system_profiler SPHardwareDataType
 DmiSystemFamily="MacBook Pro"        # Model Name
-DmiSystemProduct="MacBookPro11,2"    # Model Identifier
-DmiSystemSerial="NO_DEVICE_SN"       # Serial Number (system)
-DmiSystemUuid="CAFECAFE-CAFE-CAFE-CAFE-DECAFFDECAFF" # Hardware UUID
-DmiOEMVBoxVer="string:1"             # Apple ROM Info
-DmiOEMVBoxRev="string:.23456"        # Apple ROM Info
+DmiSystemProduct="MacBookPro11,5"    # Model Identifier
+DmiSystemSerial="C02PT0LZG8WP"       # Serial Number (system)
+DmiSystemUuid="946ABF5B-122A-5B58-82F9-0AB19953C3F" # Hardware UUID
+DmiOEMVBoxVer="string:2"             # Apple ROM Info
+DmiOEMVBoxRev="string:.30f2"        # Apple ROM Info
 DmiBIOSVersion="string:MBP7.89"      # Boot ROM Version
 #   ioreg -l | grep -m 1 board-id
-DmiBoardProduct="Mac-3CBD00234E554E41"
+DmiBoardProduct="Mac-06F11F11946D27C5"
 #   nvram 4D1EDE05-38C7-4A6A-9CC6-4BCCA8B38C14:MLB
-DmiBoardSerial="NO_LOGIC_BOARD_SN"
+DmiBoardSerial="C025213061AGF2C1Y"
 MLB="${DmiBoardSerial}"
 #   nvram 4D1EDE05-38C7-4A6A-9CC6-4BCCA8B38C14:ROM
-ROM='%aa*%bbg%cc%dd'
+ROM='%0c%bc%9f%e10%14'
 #   ioreg -l -p IODeviceTree | grep \"system-id
-SYSTEM_UUID="aabbccddeeff00112233445566778899"
+SYSTEM_UUID="9cec08359eed7151880e174ecac6e493"
 #   csrutil status
 SYSTEM_INTEGRITY_PROTECTION='10'  # '10' - enabled, '77' - disabled
 
